@@ -1,0 +1,22 @@
+diff --git a/settings.py b/settings.py
+--- a/settings.py
++++ b/settings.py
+@@ -1,13 +1,17 @@
+ """Live settings shared by the control window and the worker thread."""
+ from __future__ import annotations
+ 
++import os
+ import copy
+ import json
+ import threading
+ from pathlib import Path
+ 
+ ROOT = Path(__file__).resolve().parent
+-DATA = ROOT / "data"
++_data_override = os.environ.get("XQ_WECHAT_DATA_DIR", "").strip()
++if _data_override and not Path(_data_override).is_absolute():
++    raise ValueError("XQ_WECHAT_DATA_DIR must be absolute")
++DATA = Path(_data_override).resolve() if _data_override else ROOT / "data"
+ 
+ DEFAULTS = {
+     "base_url": "https://api.deepseek.com/v1",

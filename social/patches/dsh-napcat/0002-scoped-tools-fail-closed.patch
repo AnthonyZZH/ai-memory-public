@@ -1,0 +1,348 @@
+diff --git a/lib/social-policy.js b/lib/social-policy.js
+--- a/lib/social-policy.js
++++ b/lib/social-policy.js
+@@ -18,8 +18,9 @@
+ }
+ export function restrictSocialTools(ctx, extra = []) {
+   const allowed = new Set([...PUBLIC_TOOLS, ...extra]);
+-  if (!ctx.tools?.guard || !ctx.tools?.restrict) throw new Error('SOCIAL_GUARD_UNAVAILABLE');
+-  ctx.tools.restrict({ allow: [...allowed] });
++  if (!ctx.tools?.guard || !ctx.tools?.restrict || !ctx.tools?.schemas) throw new Error('SOCIAL_GUARD_UNAVAILABLE');
++  const present = new Set(ctx.tools.schemas().map(tool => tool.name));
++  ctx.tools.restrict({ allow: [...allowed].filter(name => present.has(name)) });
+   ctx.tools.guard(call => allowed.has(call?.name) ? undefined : 'SOCIAL_TOOL_DENIED');
+ }
+ export function minuteAt(now, timezone) {
+diff --git a/lib/bridge.js b/lib/bridge.js
+--- a/lib/bridge.js
++++ b/lib/bridge.js
+@@ -1,4 +1,4 @@
+-import { SendBudget, napcatConfig, eventLogger, restrictSocialTools, skip, mediaMarker, minuteAt } from '../lib/social-policy.js';
++import { SendBudget, napcatConfig, eventLogger, restrictSocialTools, PUBLIC_TOOLS, skip, mediaMarker, minuteAt } from '../lib/social-policy.js';
+ import { existsSync } from 'node:fs';
+ import { mkdir } from 'node:fs/promises';
+ import { homedir } from 'node:os';
+@@ -112,6 +112,7 @@
+         try {
+             await this.handleEventInner(event);
+         } catch (error) {
++            if (error instanceof Error && error.message === 'SOCIAL_TOOL_RESTRICT_FAILED') return;
+             let cwd;
+             try {
+                 const ref = chatRefOf(event);
+@@ -428,6 +429,7 @@
+                     })
+                 ]);
+             } catch (error) {
++                if (error instanceof Error && error.message === 'SOCIAL_TOOL_RESTRICT_FAILED') return;
+                 this.opts.log('warn', '归档轮失败: ' + key + ' — ' + describe(error));
+             } finally{
+                 this.archiveRunning.delete(key);
+@@ -466,10 +468,10 @@
+         let sessionId = makeSessionId(prefix + sessionKey);
+         this.opts.log('debug', '归档会话: ' + String(sessionId) + '（cwd=' + cwd + '）');
+         const live = agents.get?.(String(sessionId));
+-        if (live !== undefined) return {
++        if (live !== undefined) { this.requireVerifiedAgent(live); return {
+             agent: live,
+             dispose: async ()=>undefined
+-        };
++        }; }
+         const defaultModel = this.opts.ctx.agentDefaultModel;
+         const selection = defaultModel?.currentSelection?.();
+         const agentOptions = {};
+@@ -495,16 +497,19 @@
+             },
+             assembled: undefined
+         };
+-        const setup = async (agentCtx)=>{
+-            restrictSocialTools(agentCtx);
+-            if (presets?.mount !== undefined) {
+-                try {
+-                    await presets.mount(agentCtx, presetId);
+-                } catch (error) {
+-                    this.opts.log('debug', '归档 agent 挂预设失败: ' + describe(error));
+-                }
+-            }
+-            installModelSelection(agentCtx, selectionRef);
++        const setup = async (agentCtx, agent)=>{
++            try {
++                restrictSocialTools(agentCtx);
++                if (presets?.mount === undefined) throw new Error('missing_preset');
++                await presets.mount(agentCtx, presetId);
++                const visible = agentCtx.tools.schemas(agent).map(tool=>tool.name);
++                if (visible.some(name=>!PUBLIC_TOOLS.includes(name))) throw new Error('unexpected_tool');
++                this.verifiedAgents.add(agent);
++            } catch {
++                this.opts.log('warn', 'SOCIAL_TOOL_RESTRICT_FAILED');
++                throw new Error('SOCIAL_TOOL_RESTRICT_FAILED');
++            }
++            if (selectionRef !== undefined) installModelSelection(agentCtx, selectionRef);
+         };
+         const meta = {
+             cwd
+@@ -524,6 +529,7 @@
+         for(let attempt = 1; handle === undefined && attempt <= 3; attempt += 1){
+             const live = this.liveAgentFor(String(sessionId));
+             if (live !== undefined) {
++                this.requireVerifiedAgent(live);
+                 handle = {
+                     agent: live,
+                     dispose: async ()=>undefined
+@@ -547,10 +553,12 @@
+                     });
+                 }
+             } catch (error) {
++                if (describe(error).includes('SOCIAL_TOOL_RESTRICT_FAILED')) throw error;
+                 if (ownedByOther(error)) {
+                     await new Promise((resolve)=>setTimeout(resolve, 400));
+                     const late = this.liveAgentFor(String(sessionId));
+                     if (late !== undefined) {
++                        this.requireVerifiedAgent(late);
+                         handle = {
+                             agent: late,
+                             dispose: async ()=>undefined
+@@ -1216,6 +1224,13 @@
+             parts
+         };
+     }
++    verifiedAgents = new WeakSet();
++    requireVerifiedAgent(agent) {
++        if (!this.verifiedAgents.has(agent)) {
++            this.opts.log('warn', 'SOCIAL_TOOL_RESTRICT_FAILED');
++            throw new Error('SOCIAL_TOOL_RESTRICT_FAILED');
++        }
++    }
+     pendingChats = new Map();
+     ensureChat(ref) {
+         const existing = this.chats.get(ref.key);
+@@ -1250,6 +1265,7 @@
+         let handle;
+         const liveAgent = agents.get?.(String(sessionId));
+         if (liveAgent !== undefined) {
++            this.requireVerifiedAgent(liveAgent);
+             this.opts.log('info', '复用已存在的 agent: ' + String(sessionId));
+             handle = {
+                 agent: liveAgent,
+@@ -1285,22 +1301,19 @@
+         const presetId = this.opts.config.agentPreset.trim() === '' ? undefined : this.opts.config.agentPreset.trim();
+         const presets = this.opts.ctx.agentPresets;
+         if (presets?.mount === undefined) this.opts.log('warn', '宿主没有 agentPresets 服务（agent 可能没有工具/loop）');
+-        const setup = async (agentCtx)=>{
+-            restrictSocialTools(agentCtx);
+-            if (presets?.mount !== undefined) {
+-                try {
+-                    const mounted = await presets.mount(agentCtx, presetId);
+-                    this.opts.log('debug', 'agent 已挂预设: ' + String(mounted?.id ?? presetId ?? 'default'));
+-                } catch (error) {
+-                    this.opts.log('warn', '挂预设失败: ' + describe(error));
+-                }
+-            }
+-            if (selectionRef === undefined) {
+-                this.opts.log('warn', '没有可用模型（agentDefaultModel 缺失或未选择），这一轮可能空跑');
+-            } else {
+-                installModelSelection(agentCtx, selectionRef);
+-                this.opts.log('debug', 'agent 模型: ' + selectionRef.current.provider + '/' + selectionRef.current.model);
+-            }
++        const setup = async (agentCtx, agent)=>{
++            try {
++                restrictSocialTools(agentCtx);
++                if (presets?.mount === undefined) throw new Error('missing_preset');
++                await presets.mount(agentCtx, presetId);
++                const visible = agentCtx.tools.schemas(agent).map(tool=>tool.name);
++                if (visible.some(name=>!PUBLIC_TOOLS.includes(name))) throw new Error('unexpected_tool');
++                this.verifiedAgents.add(agent);
++            } catch {
++                this.opts.log('warn', 'SOCIAL_TOOL_RESTRICT_FAILED');
++                throw new Error('SOCIAL_TOOL_RESTRICT_FAILED');
++            }
++            if (selectionRef !== undefined) installModelSelection(agentCtx, selectionRef);
+         };
+         if (agentOptions.model === undefined) {
+             this.opts.log('warn', '没有可用的模型：在「设置 → NapCat」里填 provider/model，或先给 DSH 配一个默认模型');
+@@ -1320,6 +1333,7 @@
+             for(let attempt = 1; handle === undefined && attempt <= 3; attempt += 1){
+                 const live = this.liveAgentFor(String(sessionId));
+                 if (live !== undefined) {
++                    this.requireVerifiedAgent(live);
+                     handle = {
+                         agent: live,
+                         dispose: async ()=>undefined
+@@ -1346,10 +1360,12 @@
+                         });
+                     }
+                 } catch (error) {
++                    if (describe(error).includes('SOCIAL_TOOL_RESTRICT_FAILED')) throw error;
+                     if (ownedByOther(error)) {
+                         await new Promise((resolve)=>setTimeout(resolve, 400));
+                         const late = this.liveAgentFor(String(sessionId));
+                         if (late !== undefined) {
++                            this.requireVerifiedAgent(late);
+                             handle = {
+                                 agent: late,
+                                 dispose: async ()=>undefined
+diff --git a/src/bridge.ts b/src/bridge.ts
+--- a/src/bridge.ts
++++ b/src/bridge.ts
+@@ -1,4 +1,4 @@
+-import { SendBudget, napcatConfig, eventLogger, restrictSocialTools, skip, mediaMarker, minuteAt } from '../lib/social-policy.js'
++import { SendBudget, napcatConfig, eventLogger, restrictSocialTools, PUBLIC_TOOLS, skip, mediaMarker, minuteAt } from '../lib/social-policy.js'
+ /**
+  * QQ 会话 ↔ dsh agent 的桥。
+  *
+@@ -178,6 +178,7 @@
+     try {
+       await this.handleEventInner(event)
+     } catch (error) {
++      if (error instanceof Error && error.message === 'SOCIAL_TOOL_RESTRICT_FAILED') return
+       let cwd: string | undefined
+       try {
+         const ref = chatRefOf(event as ObMessageEvent)
+@@ -547,6 +548,7 @@
+           }),
+         ])
+       } catch (error) {
++        if (error instanceof Error && error.message === 'SOCIAL_TOOL_RESTRICT_FAILED') return
+         this.opts.log('warn', '归档轮失败: ' + key + ' — ' + describe(error))
+       } finally {
+         this.archiveRunning.delete(key)
+@@ -583,7 +585,7 @@
+     let sessionId = makeSessionId(prefix + sessionKey)
+     this.opts.log('debug', '归档会话: ' + String(sessionId) + '（cwd=' + cwd + '）')
+     const live = (agents as unknown as { get?(id: never): unknown }).get?.(String(sessionId) as never) as Agent | undefined
+-    if (live !== undefined) return { agent: live, dispose: async () => undefined }
++    if (live !== undefined) { this.requireVerifiedAgent(live); return { agent: live, dispose: async () => undefined } }
+     const defaultModel = (this.opts.ctx as unknown as {
+       agentDefaultModel?: { currentSelection?(): { provider?: string; model?: string; reasoningEffort?: string } | undefined }
+     }).agentDefaultModel
+@@ -609,16 +611,19 @@
+       },
+       assembled: undefined,
+     }
+-    const setup = async (agentCtx: unknown): Promise<void> => {
+-      restrictSocialTools(agentCtx)
+-      if (presets?.mount !== undefined) {
+-        try {
+-          await presets.mount(agentCtx, presetId)
+-        } catch (error) {
+-          this.opts.log('debug', '归档 agent 挂预设失败: ' + describe(error))
+-        }
+-      }
+-      installModelSelection(agentCtx as never, selectionRef as never)
++    const setup = async (agentCtx: any, agent: object): Promise<void> => {
++      try {
++        restrictSocialTools(agentCtx)
++        if (presets?.mount === undefined) throw new Error('missing_preset')
++        await presets.mount(agentCtx, presetId)
++        const visible = agentCtx.tools.schemas(agent).map((tool: {name: string}) => tool.name)
++        if (visible.some((name: string) => !PUBLIC_TOOLS.includes(name))) throw new Error('unexpected_tool')
++        this.verifiedAgents.add(agent)
++      } catch {
++        this.opts.log('warn', 'SOCIAL_TOOL_RESTRICT_FAILED')
++        throw new Error('SOCIAL_TOOL_RESTRICT_FAILED')
++      }
++      if (selectionRef !== undefined) installModelSelection(agentCtx as never, selectionRef as never)
+     }
+     const meta: { cwd: string; agentPreset?: string } = { cwd }
+     if (presetId !== undefined) meta.agentPreset = presetId
+@@ -636,6 +641,7 @@
+     for (let attempt = 1; handle === undefined && attempt <= 3; attempt += 1) {
+       const live = this.liveAgentFor(String(sessionId))
+       if (live !== undefined) {
++        this.requireVerifiedAgent(live)
+         handle = { agent: live, dispose: async () => undefined }
+         break
+       }
+@@ -647,10 +653,12 @@
+           handle = await agents.create({ sessionId, meta, agentOptions, setup })
+         }
+       } catch (error) {
++        if (describe(error).includes('SOCIAL_TOOL_RESTRICT_FAILED')) throw error
+         if (ownedByOther(error)) {
+           await new Promise(resolve => setTimeout(resolve, 400))
+           const late = this.liveAgentFor(String(sessionId))
+           if (late !== undefined) {
++            this.requireVerifiedAgent(late)
+             handle = { agent: late, dispose: async () => undefined }
+             break
+           }
+@@ -1252,6 +1260,13 @@
+   // ── 会话装配 ───────────────────────────────────────────────────────────────
+ 
+   /** 同一聊天并发进来时只装配一次（并发 create 会撞 write handle）。 */
++  private readonly verifiedAgents = new WeakSet<object>()
++  private requireVerifiedAgent(agent: object): void {
++    if (!this.verifiedAgents.has(agent)) {
++      this.opts.log('warn', 'SOCIAL_TOOL_RESTRICT_FAILED')
++      throw new Error('SOCIAL_TOOL_RESTRICT_FAILED')
++    }
++  }
+   private readonly pendingChats = new Map<string, Promise<ChatState>>()
+ 
+   private ensureChat(ref: ChatRef): Promise<ChatState> {
+@@ -1296,6 +1311,7 @@
+     let handle: { agent: Agent; dispose(): Promise<void> } | undefined
+     const liveAgent = (agents as unknown as { get?(id: never): unknown }).get?.(String(sessionId) as never) as Agent | undefined
+     if (liveAgent !== undefined) {
++      this.requireVerifiedAgent(liveAgent)
+       this.opts.log('info', '复用已存在的 agent: ' + String(sessionId))
+       handle = { agent: liveAgent, dispose: async () => undefined }
+     }
+@@ -1321,22 +1337,19 @@
+     const presetId = this.opts.config.agentPreset.trim() === '' ? undefined : this.opts.config.agentPreset.trim()
+     const presets = (this.opts.ctx as unknown as { agentPresets?: { mount?(target: unknown, id?: string): Promise<{ id?: string }> } }).agentPresets
+     if (presets?.mount === undefined) this.opts.log('warn', '宿主没有 agentPresets 服务（agent 可能没有工具/loop）')
+-    const setup = async (agentCtx: unknown): Promise<void> => {
+-      restrictSocialTools(agentCtx)
+-      if (presets?.mount !== undefined) {
+-        try {
+-          const mounted = await presets.mount(agentCtx, presetId)
+-          this.opts.log('debug', 'agent 已挂预设: ' + String(mounted?.id ?? presetId ?? 'default'))
+-        } catch (error) {
+-          this.opts.log('warn', '挂预设失败: ' + describe(error))
+-        }
+-      }
+-      if (selectionRef === undefined) {
+-        this.opts.log('warn', '没有可用模型（agentDefaultModel 缺失或未选择），这一轮可能空跑')
+-      } else {
+-        installModelSelection(agentCtx as never, selectionRef as never)
+-        this.opts.log('debug', 'agent 模型: ' + selectionRef.current.provider + '/' + selectionRef.current.model)
+-      }
++    const setup = async (agentCtx: any, agent: object): Promise<void> => {
++      try {
++        restrictSocialTools(agentCtx)
++        if (presets?.mount === undefined) throw new Error('missing_preset')
++        await presets.mount(agentCtx, presetId)
++        const visible = agentCtx.tools.schemas(agent).map((tool: {name: string}) => tool.name)
++        if (visible.some((name: string) => !PUBLIC_TOOLS.includes(name))) throw new Error('unexpected_tool')
++        this.verifiedAgents.add(agent)
++      } catch {
++        this.opts.log('warn', 'SOCIAL_TOOL_RESTRICT_FAILED')
++        throw new Error('SOCIAL_TOOL_RESTRICT_FAILED')
++      }
++      if (selectionRef !== undefined) installModelSelection(agentCtx as never, selectionRef as never)
+     }
+     if (agentOptions.model === undefined) {
+       this.opts.log('warn', '没有可用的模型：在「设置 → NapCat」里填 provider/model，或先给 DSH 配一个默认模型')
+@@ -1361,6 +1374,7 @@
+       for (let attempt = 1; handle === undefined && attempt <= 3; attempt += 1) {
+         const live = this.liveAgentFor(String(sessionId))
+         if (live !== undefined) {
++          this.requireVerifiedAgent(live)
+           handle = { agent: live, dispose: async () => undefined }
+           created = false
+           this.opts.log('info', '复用已存在的 agent: ' + String(sessionId))
+@@ -1375,11 +1389,13 @@
+             handle = await agents.create({ sessionId, meta, agentOptions, setup })
+           }
+         } catch (error) {
++          if (describe(error).includes('SOCIAL_TOOL_RESTRICT_FAILED')) throw error
+           if (ownedByOther(error)) {
+             // 写持有者存在但拿不到 agent（可能刚被别的路径建好）：等一下再看一次
+             await new Promise(resolve => setTimeout(resolve, 400))
+             const late = this.liveAgentFor(String(sessionId))
+             if (late !== undefined) {
++              this.requireVerifiedAgent(late)
+               handle = { agent: late, dispose: async () => undefined }
+               created = false
+               break

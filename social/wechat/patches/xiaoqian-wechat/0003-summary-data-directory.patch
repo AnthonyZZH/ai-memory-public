@@ -1,0 +1,19 @@
+--- a/social_brain.py
++++ b/social_brain.py
+@@ -6,6 +6,7 @@
+ import urllib.request
+ import urllib.parse
+ from social_policy import unsafe
++from settings import DATA
+ 
+ 
+ class NoRedirect(urllib.request.HTTPRedirectHandler):
+@@ -16,7 +17,7 @@
+ class Brain:
+     def __init__(self, settings, personas, stickers=None, log_path=None):
+         self.settings, self.personas, self.stickers = settings, personas, stickers
+-        self.state_dir = Path(settings.get('social_state_dir', Path(__file__).parent / 'data/social-context'))
++        self.state_dir = Path(settings.get('social_state_dir', DATA / 'social-context'))
+         # No inherited HTTP proxy, redirect, subprocess, tools, LM Studio or Forge.
+         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+ 

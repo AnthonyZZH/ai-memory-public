@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:conversation-processor:memory-candidate:v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "id", "source", "persona_hash", "summary", "quotes", "category", "importance", "sensitivity", "sensitivity_tags", "trait_signals", "praise_only", "expression"],
+  "properties": {
+    "schema": {"const": "memory-candidate/v1"},
+    "id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "session", "refs", "source_time", "observed_at"],
+      "properties": {
+        "kind": {"enum": ["dsh", "lmstudio", "cc", "sim"]},
+        "audience": {"enum": ["owner", "group", "third_party", "unknown"]},
+        "session": {"type": "string", "minLength": 1},
+        "refs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "source_time": {"anyOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]},
+        "observed_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "persona_hash": {"anyOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9a-f]{8}$"}]},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 40},
+    "quotes": {"type": "array", "maxItems": 2, "items": {"type": "object", "additionalProperties": false, "required": ["speaker", "text"], "properties": {"speaker": {"enum": ["owner", "assistant"]}, "text": {"type": "string", "minLength": 1, "maxLength": 512}}}},
+    "category": {"enum": ["preference", "emotion", "event", "correction", "feedback", "expression", "relationship", "none"]},
+    "importance": {"type": "integer", "minimum": 1, "maximum": 5},
+    "sensitivity": {"enum": ["normal", "private", "unsure"]},
+    "sensitivity_tags": {"type": "array", "uniqueItems": true, "items": {"enum": ["health", "body", "finance", "birthday", "home_location", "other"]}},
+    "trait_signals": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["trait", "direction", "reason"], "properties": {"trait": {"type": "string", "minLength": 1}, "direction": {"enum": [-1, 1]}, "reason": {"type": "string", "minLength": 1, "maxLength": 30}}}},
+    "praise_only": {"type": "boolean"},
+    "expression": {"type": ["string", "null"]}
+  },
+  "allOf": [{"if": {"properties": {"category": {"const": "expression"}}}, "then": {"properties": {"expression": {"type": "string", "minLength": 1}}}, "else": {"properties": {"expression": {"type": "null"}}}}]
+}

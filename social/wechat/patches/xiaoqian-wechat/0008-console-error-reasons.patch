@@ -1,0 +1,16 @@
+--- a/app.py
++++ b/app.py
+@@ -128,8 +128,12 @@ class Bot:
+         self.learn_check_at = time.monotonic() + 300
+ 
+     def emit(self, kind, payload):
+-        self.events.put((kind, 'social_event' if kind == 'error' else payload))
++        # The owner's console may show the real reason (it already shows chat text);
++        # the log file keeps only code-like payloads, never free text.
++        self.events.put((kind, str(payload)[:300] if kind == 'error' else payload))
+         record = {'time': datetime.now().astimezone().isoformat(), 'event': kind if kind in ('error','status','sent','received') else 'ui_event'}
++        if kind == 'error':
++            record['code'] = payload if isinstance(payload, str) and re.fullmatch(r'[A-Za-z0-9_]{1,64}', payload) else 'non_code'
+         with self.log_lock:
+             self.log_dir.mkdir(parents=True, exist_ok=True)
+             with (self.log_dir / 'events.jsonl').open('a', encoding='utf-8') as f:

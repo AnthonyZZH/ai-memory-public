@@ -1,0 +1,29 @@
+--- a/social_brain.py
++++ b/social_brain.py
+@@ -139,8 +139,15 @@ class Brain:
+         count = state['count']
+         def fingerprint(values):
+             return hashlib.sha256(json.dumps(values, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+-        if type(count) is not int or count < 0 or count > len(old) or count and fingerprint(old[:count]) != state['prefix']:
+-            raise RuntimeError('social_history_changed')
++        if type(count) is not int or count < 0 or count > len(old) or count and fingerprint(old[:count]) != state.get('prefix'):
++            # The runner trims history from the front, so summarized rows shift left. Realign on
++            # the last summarized row; if it is gone or ambiguous, start a fresh summary rather
++            # than reuse a misaligned one.
++            mark = state.get('last')
++            spots = [i for i, row in enumerate(old) if mark and fingerprint([row]) == mark]
++            count = spots[0] + 1 if len(spots) == 1 else 0
++            if not count:
++                state['summary'] = ''
+         summary = str(state['summary'])[:600]
+         while count < len(old):
+             batch, used = [], 0
+@@ -154,7 +161,7 @@ class Brain:
+             summary = value['summary'][:600]
+             self.state_dir.mkdir(parents=True, exist_ok=True)
+             temp = path.with_suffix('.tmp')
+-            temp.write_text(json.dumps({'count':count,'prefix':fingerprint(old[:count]),'summary':summary}, ensure_ascii=False), encoding='utf-8')
++            temp.write_text(json.dumps({'count':count,'prefix':fingerprint(old[:count]),'last':fingerprint([old[count-1]]),'summary':summary}, ensure_ascii=False), encoding='utf-8')
+             temp.replace(path)
+         return summary, recent
+ 

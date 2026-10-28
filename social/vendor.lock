@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "projects": [
+    {
+      "name": "dsh-napcat",
+      "repository": "wzwei1990/dsh-napcat",
+      "commit": "95e818a1a47e0d2dfc15ba374bffa5bf50cea2f6",
+      "tree_sha256": "63ca516a9496383ffeab28d93220e7fb13630f17a908b3a9122b3ee977523fc7",
+      "patched_tree_sha256": "d6313035a57923056f6153ad1255b4218447fa6cbd7db5167cc020356a74ee5c",
+      "patches": [
+        {
+          "path": "patches/dsh-napcat/0001-social-boundaries.patch",
+          "sha256": "2b235952521e5e0c76d6ecbd7d3e873626f16b330c2d878ac77434465ce42cfa"
+        },
+        {
+          "path": "patches/dsh-napcat/0002-scoped-tools-fail-closed.patch",
+          "sha256": "737bfd69825a7b2e50cc9282560641f98a0c578d07863decde23f8392019b3fa"
+        }
+      ]
+    },
+    {
+      "name": "dsh-wechat-ai-bridge",
+      "repository": "Windfarer/dsh-wechat-ai-bridge",
+      "commit": "93e3e3373d3b5dd65b07fec21f07bacfe9563c69",
+      "tree_sha256": "939808add85ab5ca5087e7f193bf96f5d85832d2b96635deb71dbf9f26a0e3d9",
+      "patched_tree_sha256": "24ed7afbb2fe17df7506adac8283b6c13bdabe7d1df7ab6432613bfab2a044e6",
+      "patches": [
+        {
+          "path": "patches/dsh-wechat-ai-bridge/0001-social-boundaries.patch",
+          "sha256": "d57823b3cd4668ef694d2ba92626ad538a382493c13b395aade9358ecb2faddc"
+        }
+      ]
+    }
+  ]
+}

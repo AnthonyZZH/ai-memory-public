@@ -1,0 +1,36 @@
+filters:
+  and:
+    - file.ext == "md"
+    - file.folder != ""
+properties:
+  file.name:
+    displayName: 笔记
+  file.folder:
+    displayName: 分类
+  note.visibility:
+    displayName: visibility
+  note.title:
+    displayName: 结论
+views:
+  - type: table
+    name: 按分类
+    groupBy:
+      property: file.folder
+      direction: ASC
+    order:
+      - file.name
+      - title
+      - visibility
+    summaries:
+      file.name: Filled
+  - type: table
+    name: 按 visibility
+    groupBy:
+      property: visibility
+      direction: ASC
+    order:
+      - file.name
+      - file.folder
+      - visibility
+    summaries:
+      file.name: Filled

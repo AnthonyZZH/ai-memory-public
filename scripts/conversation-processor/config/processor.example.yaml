@@ -1,0 +1,57 @@
+# Portable example. Explicitly configure and enable sources before baseline.
+version: 1
+cursor_db: ../state/cursors.sqlite
+output_dir: ../state/candidates
+traits: [curiosity, independence]
+expressions:
+  non_owner_markers: [group chat, third-party]
+  aggressive_keywords: [idiot, moron, shut up]
+praise:
+  keywords: [adorable, excellent, wonderful, love]
+  trait_aliases:
+    curiosity: [curious]
+    independence: [independent]
+sensitivity:
+  keyword_level: private
+  keywords:
+    health: [diagnosis, medication]
+    body: [weight, pregnancy]
+    finance: [bank balance, salary]
+    birthday: [birthday, date of birth]
+    home_location: [home address]
+    other: [private information]
+extractor:
+  base_url: http://127.0.0.1:8080/v1
+  model: replace-with-loaded-local-model
+  timeout_seconds: 120
+  temperature: 0.1
+  max_tokens: 2048
+  max_response_bytes: 1048576
+  max_turn_chars: 32000
+sources:
+  - id: desktop-events
+    kind: dsh
+    max_window_size: 2147483648 # Bytes; maximum permitted decoder window (2 GiB).
+    enabled: false
+    path: ../data/event-sessions
+    pattern: '**/session.v4.jsonl.zstd'
+    preset: personal-assistant
+  - id: gui-conversations
+    kind: lmstudio
+    enabled: false
+    path: ../data/conversations
+    pattern: '*.conversation.json'
+    presets: ['@local:personal-assistant']
+    require_persona_marker: false
+  - id: local-terminal
+    kind: cc
+    enabled: false
+    path: ../data/terminal-project
+    pattern: '*.jsonl'
+    cwd: /replace/with/local/workspace
+    models: [replace-with-loaded-local-model]
+  - id: simulation
+    kind: sim
+    enabled: false
+    path: ../data/sim
+    pattern: '*.jsonl'

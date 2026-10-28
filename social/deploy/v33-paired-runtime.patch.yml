@@ -1,0 +1,5 @@
+- id: dsh-napcat
+  disabled: true
+- insert:
+  - id: v33-paired-runtime
+    name: file:///C:/xiaoqian/setup/v33-paired-runtime.mjs

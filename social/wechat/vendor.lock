@@ -1,0 +1,62 @@
+{
+    "version":  1,
+    "projects":  [
+                     {
+                         "name":  "xiaoqian-wechat",
+                         "repository":  "AnthonyZZH/xiaoqian-wechat",
+                         "commit":  "27bb88c33d3b9e43ffb368f576b736ec090b88be",
+                         "tree_sha256":  "dc1e97472c477abaf6f0aa0edb49338fc69363a70d3bc85589641c38e80cfff0",
+                         "patched_tree_sha256":  "e2d61c9211928a484eb00cd957e4a490649653cf250ccbb7fe4e41148f2e0ea2",
+                         "patches":  [
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0001-social-hardening.patch",
+                                             "sha256":  "5b8782c913d5f3a5db2877760f5201fd3405a5ee1f63774f4ad1ea33ff0659f5"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0002-data-directory.patch",
+                                             "sha256":  "31a379faf491ad86d5147fae09075bb50195b3bf952d7e246952abdcf8e577f3"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0003-summary-data-directory.patch",
+                                             "sha256":  "479b32b598ca8b57785a5d77fdb117614ad50b431528dd44894d22fd873f1acf"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0004-keep-wechat-front.patch",
+                                             "sha256":  "94d01b2644059cad37eddcb5c4f4f7bbf8669bb13f44f6690ba194fc3e67975c"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0005-owner-relay.patch",
+                                             "sha256":  "8e26da00864076f1a1973201b21a95c47f154d837b3704d5803ee397e0c7b577"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0006-images-group-context.patch",
+                                             "sha256":  "6dd9d099c46eb321f337978d16ec407a0433b798ae5f46e973a871001688d02c"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0007-json-format-reminder.patch",
+                                             "sha256":  "b6312441c9383c3411604d61c9e2906846499a7a4131a885cb7b7c529bd164e7"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0008-console-error-reasons.patch",
+                                             "sha256":  "5fbe1523573dc3d4b6cfe5b7df4ebe2062e42703bbe29424f4fab51f3e3c289f"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0009-summary-realign.patch",
+                                             "sha256":  "eef499c77963955d423942b6c426846bd60639526e12b49bdb9405417bcc75b5"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0010-easy-owner-relay.patch",
+                                             "sha256":  "7e608d36d9e48a440c7e66f47fa1df55324426fa69a8ea99b7baa7267f098037"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0011-relay-speaks-in-place.patch",
+                                             "sha256":  "47ecc0c487a186bcdcc057c4bc183bc65c65ae56c4e9434ff2b306560e08cbe9"
+                                         },
+                                         {
+                                             "path":  "patches/xiaoqian-wechat/0012-relay-to-person.patch",
+                                             "sha256":  "b237a93480513986bb6e858768fb1380134876f2bf1bc73c5e8bcd01ff0f8411"
+                                         }
+                                     ]
+                     }
+                 ]
+}

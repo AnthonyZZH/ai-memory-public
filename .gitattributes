@@ -1,0 +1,7 @@
+*.md eol=lf
+*.yaml eol=lf
+*.json eol=lf
+*.base eol=lf
+*.ps1 eol=crlf
+*.patch -text
+*.lock -text

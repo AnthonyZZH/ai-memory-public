@@ -1,0 +1,41 @@
+version: 1
+repository: ..
+private_repository: ../../AI-Memory-private
+processor_config: processor.yaml
+reflect_every: 20
+expression_limit: 30
+max_candidate_bytes: 1048576
+max_reflection_episodes: 100
+notifications:
+  enabled: true
+sync:
+  automatic: true
+  targets:
+    - id: lm-persona
+      kind: lmstudio
+      path: C:/Users/<you>/.lmstudio/config-presets/小千.preset.json
+    - id: lm-library
+      kind: lmstudio
+      path: C:/Users/<you>/.lmstudio/config-presets/her-library.preset.json
+    - id: dsh-desktop
+      kind: dsh
+      path: C:/Users/<you>/.dsh/profiles/desktop/cordis.patch.yml
+      preset: xiaoqian
+daily:
+  model_url: http://127.0.0.1:8080
+  control_url: http://127.0.0.1:8088
+  runtime_directory: C:/Users/<you>/AppData/Local/Strata/runtime
+  start_timeout_seconds: 1500
+  stop_timeout_seconds: 420
+  poll_seconds: 5
+git_identity:
+  name: xq-engine
+  email: xq-engine@localhost
+reflector:
+  base_url: http://127.0.0.1:8080/v1
+  model: qwen3.8-flash-next-iq3_s
+  timeout_seconds: 120
+  temperature: 0.1
+  max_tokens: 4096
+  max_response_bytes: 1048576
+  max_input_chars: 48000

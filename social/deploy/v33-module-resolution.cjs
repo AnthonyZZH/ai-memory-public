@@ -1,0 +1,3 @@
+﻿const {createRequire}=require('node:module');
+const roots=[['host-agent-loop','C:/xiaoqian/app/dsh/node_modules/@deepseek-ai/dsh-agent-loop/package.json'],['host-tools','C:/xiaoqian/app/dsh/node_modules/@deepseek-ai/dsh-tools/package.json'],['profile-tools','C:/xiaoqian/data/qq/dsh-home/profiles/qq-social/node_modules/@deepseek-ai/dsh-tools/package.json'],['profile-plugin','C:/xiaoqian/data/qq/dsh-home/profiles/qq-social/node_modules/dsh-napcat/package.json']];
+for(const [name,p] of roots){try{const req=createRequire(p);for(const dep of ['@deepseek-ai/dsh-scope','@deepseek-ai/dsh-tools','@deepseek-ai/cordis'])try{console.log(name,dep,req.resolve(dep));}catch{console.log(name,dep,'missing');}}catch{console.log(name,'unavailable');}}

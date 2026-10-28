@@ -1,0 +1,5 @@
+﻿- id: dsh-napcat
+  disabled: true
+- insert:
+  - id: v33-tool-audit-final
+    name: file:///C:/xiaoqian/setup/v33-tool-audit-final.mjs

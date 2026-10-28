@@ -1,0 +1,31 @@
+# 密钥与环境变量
+*.env
+.env*
+*.key
+*.pem
+secrets*
+
+# 缓存、备份、运行工具(避免备份递归与纳入可执行文件)
+cache/
+backups/
+bin/
+tools/
+*.exe
+*.zip
+
+# 笔记工具运行产物
+vault/.obsidian/workspace*.json
+vault/.obsidian/cache
+vault/basic-memory/
+*.db
+*.db-wal
+*.db-shm
+*.lock
+!social/wechat/vendor.lock
+!social/vendor.lock
+.lock
+
+apps/
+
+# AgentBridge local runtime configuration
+/.agentbridge/

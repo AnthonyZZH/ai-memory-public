@@ -1,0 +1,47 @@
+--- a/app.py
++++ b/app.py
+@@ -270,9 +270,12 @@ class Bot:
+             elif EVERYONE.search(instruction) or '@' in instruction or '＠' in instruction:
+                 receipt = '这次不能使用艾特，没发出去。'
+             else:
+-                text = self.brain.relay_text(instruction)
++                try:
++                    text = self.brain.relay_text(instruction)
++                except Exception:
++                    text = None  # nothing was sent yet: tell the owner instead of pausing
+                 if not valid_text(text):
+-                    receipt = '这次内容不符合发送规则，没发出去。'
++                    receipt = '这句我没写好，先没发出去，你换个说法再让我去一次？'
+                 elif cancel() or resolve(asked, self.settings['chats'], self.settings.get('owner', '')) != target:
+                     raise RuntimeError('social_relay_authorization_changed')
+                 else:
+--- a/social_brain.py
++++ b/social_brain.py
+@@ -30,12 +30,21 @@ class Brain:
+ 
+     def relay_text(self, instruction):
+         # Only the owner's request is supplied; no other chat history or tools.
+-        prompt = self.persona().prompt[:12000] + '\n按主人要求用自己的口吻写一句话，只输出 JSON {"text":"..."}。不得使用链接、路径、媒体标记或@。'
+-        value = self.request([{'role': 'system', 'content': prompt},
+-                              {'role': 'user', 'content': instruction[:2000]}])
+-        if not isinstance(value, dict) or set(value) != {'text'} or not isinstance(value['text'], str):
+-            raise RuntimeError('social_relay_response_invalid')
+-        return value['text']
++        prompt = self.persona().prompt[:12000] + (
++            '\n主人私下让你去另一个聊天里说一句话。你现在已经在那个聊天里了，直接对那里的人说出这句话本身，用你自己的口吻。'
++            '不要称呼主人，不要提"主人让我""这就去""冒个泡"之类，不要复述或解释这个要求，别让人看出是谁让你来的。'
++            '只输出 JSON {"text":"..."}。不得使用链接、路径、媒体标记或@。')
++        messages = [{'role': 'system', 'content': prompt},
++                    {'role': 'user', 'content': '主人的要求：' + instruction[:2000]},
++                    {'role': 'system', 'content': '只输出要在那个聊天里说的那句话，JSON {"text":"..."}。'}]
++        for _ in range(2):
++            value = self.request(messages)
++            if not isinstance(value, dict) or set(value) != {'text'} or not isinstance(value['text'], str):
++                raise RuntimeError('social_relay_response_invalid')
++            # A line that talks about the owner gives away who sent her; try once more.
++            if '主人' not in value['text']:
++                return value['text']
++        raise RuntimeError('social_relay_mentions_owner')
+ 
+     def describe_image(self, image):
+         """Send one bounded in-memory JPEG to DeepSeek; never log image or response."""

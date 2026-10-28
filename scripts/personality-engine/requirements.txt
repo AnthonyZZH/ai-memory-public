@@ -1,0 +1,2 @@
+# Reuse the dedicated xq-engine environment and exact dependency versions.
+-r ../conversation-processor/requirements.lock.txt

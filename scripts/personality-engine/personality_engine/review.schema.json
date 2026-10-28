@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false, "required": ["reviews"],
+  "properties": {"reviews": {"type": "array", "items": {
+    "type": "object", "additionalProperties": false,
+    "required": ["id", "decision", "reason"],
+    "properties": {
+      "id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+      "decision": {"enum": ["approve", "veto"]},
+      "reason": {"type": "string", "minLength": 1, "maxLength": 240}
+    }
+  }}}
+}

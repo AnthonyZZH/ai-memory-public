@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false, "required": ["proposals"],
+  "properties": {"proposals": {"type": "array", "maxItems": 16, "items": {
+    "type": "object", "additionalProperties": false,
+    "required": ["trait", "delta", "evidence", "counter_evidence", "reason"],
+    "properties": {
+      "trait": {"type": "string", "minLength": 1, "maxLength": 100},
+      "delta": {"type": "integer", "not": {"const": 0}},
+      "evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9a-f]{16}$"}},
+      "counter_evidence": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9a-f]{16}$"}},
+      "reason": {"type": "string", "minLength": 1, "maxLength": 500}
+    }
+  }}}
+}

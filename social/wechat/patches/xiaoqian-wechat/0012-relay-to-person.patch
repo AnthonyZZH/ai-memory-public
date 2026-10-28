@@ -1,0 +1,236 @@
+--- a/app.py
++++ b/app.py
+@@ -234,20 +234,29 @@ class Bot:
+         return None
+ 
+     def enqueue_owner_relay(self, runner, line):
+-        from owner_relay import RELAY_HINT, resolve, guess
++        from owner_relay import RELAY_HINT, resolve, guess, people_directory
+         if not runner.is_owner() or runner.replaying or not isinstance(line, str) or not RELAY_HINT.search(line):
+             return False
+         # The owner speaks loosely ("去饭友群说…"): let the model map it onto an allowed chat.
+         owner = self.settings.get('owner', '')
+         choices = [c for c, info in self.settings['chats'].items() if isinstance(info, dict) and c != owner]
+         try:
+-            intent = self.brain.relay_intent(line, choices)
++            people = people_directory(self.settings['chats'], owner, self.data)
++        except Exception:
++            people = None
++        try:
++            intent = (self.brain.relay_intent(line, choices, people) if people and people['groups']
++                      else self.brain.relay_intent(line, choices))
+         except Exception:
+             return False  # not sure it was a relay request: answer it as ordinary chat
+         if not intent['send']:
+             return False
+         target = intent['chat'] if resolve(intent['chat'], self.settings['chats'], owner) else guess(line, choices)
+-        parsed = (target or '', line)
++        # Only @ someone the group's directory really lists; never a made-up name.
++        at = intent.get('at', '').strip()
++        if not target or at not in ((people or {}).get('groups', {}).get(target) or []):
++            at = ''
++        parsed = (target or '', line, at, '' if at else intent.get('hint', '').strip()[:20])
+         self.owner_relay_requests.append((runner, parsed))
+         return True
+ 
+@@ -255,7 +264,9 @@ class Bot:
+         from owner_relay import RelayBudget, resolve, valid_text, EVERYONE
+         if not self.owner_relay_requests:
+             return False
+-        runner, (asked, instruction) = self.owner_relay_requests.popleft()
++        runner, (asked, instruction, *rest) = self.owner_relay_requests.popleft()
++        at = rest[0] if rest else ''
++        hint = rest[1] if len(rest) > 1 else ''
+         owner = self.settings.get('owner', '')
+         epoch = self.enabled.epoch
+         cancel = lambda: self.stop.is_set() or not self.enabled.is_set() or self.enabled.epoch != epoch
+@@ -264,14 +275,36 @@ class Bot:
+             if cancel() or runner is not self.runner or not runner.is_owner() or title != owner or not private:
+                 raise RuntimeError('social_relay_origin_invalid')
+             target = resolve(asked, self.settings['chats'], owner)
+-            if not target:
++            ask = None
++            if hint and (not target or self.settings['chats'][target].get('mode') == 'group'):
++                # Find the person with WeChat's own @ list: it knows every member, our records may not.
++                groups = [target] if target else [c for c, info in self.settings['chats'].items()
++                                                  if isinstance(info, dict) and info.get('mode') == 'group']
++                found = []
++                for group in groups:
++                    if cancel():
++                        raise RuntimeError('social_relay_cancelled')
++                    self.go(group)
++                    self.adapter.validate()
++                    found += [(group, name) for name in self.adapter.members(hint, cancel) if name != owner]
++                self.go(owner)
++                if len(found) == 1:
++                    target, at = found[0]
++                    asked = target
++                elif found:
++                    ask = '你说的是哪位呀？' + '、'.join(f'{name}（{group}）' for group, name in found[:8])
++                else:
++                    ask = f'群里没找到「{hint}」这个人，你换个叫法？'
++            if ask:
++                receipt = ask
++            elif not target:
+                 names = [c for c, info in self.settings['chats'].items() if isinstance(info, dict) and c != owner]
+                 receipt = '你说的是哪个呀？可以发的有：' + '、'.join(names)
+             elif EVERYONE.search(instruction) or '@' in instruction or '＠' in instruction:
+                 receipt = '这次不能使用艾特，没发出去。'
+             else:
+                 try:
+-                    text = self.brain.relay_text(instruction)
++                    text = self.brain.relay_text(instruction + (f'\n（在群里对{at}说，系统会自动@他，正文不用再写@）' if at else ''))
+                 except Exception:
+                     text = None  # nothing was sent yet: tell the owner instead of pausing
+                 if not valid_text(text):
+@@ -286,8 +319,8 @@ class Bot:
+                     if not RelayBudget(self.data/'relay-budget.json').reserve():
+                         receipt = '转告次数已达限制，或计数不可用，没发出去。'
+                     else:
+-                        self.adapter.send(text, cancel=cancel, max_chars=100)
+-                        receipt = f'已经在「{target}」说了：{text}'
++                        self.adapter.send(text, cancel=cancel, max_chars=100, at=(at,) if at else ())
++                        receipt = f'已经在「{target}」' + (f'@{at} ' if at else '') + f'说了：{text}'
+                     self.go(owner)
+             if cancel() or self.settings.get('owner', '') != owner:
+                 raise RuntimeError('social_relay_origin_invalid')
+--- a/owner_relay.py
++++ b/owner_relay.py
+@@ -4,11 +4,70 @@ import math
+ import re
+ import time
+ from pathlib import Path
+-from social_policy import _LOCK, process_lock, unsafe
++from social_policy import _LOCK, process_lock, unsafe, chat_key
+ 
+ COMMAND = re.compile(r'^(?:(?:小千|你|请|请你|麻烦你|帮我|我让你|我让她)\s*)?(?:去|到|在)\s*(.{1,80}?)\s*(?:里|里面|中)?\s*(?:说|讲|发)\s*[:：]?\s*(.+)', re.S)
+ EVERYONE = re.compile(r'[@＠]\s*(?:所有人|全体成员|everyone|all)|全体成员|所有人', re.I)
+ # Owner lines worth asking the model about: anything that sounds like "say/send/tell over there".
++def people_directory(chats, owner, data_dir):
++    """Who she knows and where: group members from sender books and memory, plus short facts.
++
++    Lets the model map a nickname the owner uses ("张哥") onto a real member to @.
++    """
++    data_dir = Path(data_dir)
++    groups, facts, nicknames = {}, {}, {}
++    for chat, info in chats.items():
++        if not isinstance(info, dict) or chat == owner:
++            continue
++        mode = info.get('mode')
++        names = []
++        if mode == 'group':
++            names += [r for r in info.get('roster', []) if isinstance(r, str)]
++            try:
++                book = json.loads((data_dir / 'senders' / (chat_key(chat, mode) + '.json')).read_text(encoding='utf-8'))
++                for person in book if isinstance(book, list) else []:
++                    names += [person.get('label')] if person.get('label') else []
++                    names += [n for n in (person.get('names') or {}) if isinstance(n, str)]
++            except (OSError, ValueError, AttributeError):
++                pass
++            try:
++                # Whoever spoke recently, newest first: the sender book may not know them yet.
++                rows = json.loads((data_dir / 'history' / (chat_key(chat, mode) + '.json')).read_text(encoding='utf-8'))
++                rows = rows.get('history', rows) if isinstance(rows, dict) else rows
++                names = [r.get('sender') for r in reversed(rows) if isinstance(r, dict) and r.get('role') == 'user'
++                         and isinstance(r.get('sender'), str)] + names
++            except (OSError, ValueError, AttributeError):
++                pass
++        try:
++            memory = json.loads((data_dir / 'memory' / (chat_key(chat, mode) + '.json')).read_text(encoding='utf-8'))
++            people = memory.get('people', {}) if isinstance(memory, dict) else {}
++            jargon = memory.get('jargon', {}) if isinstance(memory, dict) else {}
++        except (OSError, ValueError):
++            people, jargon = {}, {}
++        # Group slang often records nicknames ("张哥: 对Alex的昵称").
++        for term, info in (jargon.items() if isinstance(jargon, dict) else []):
++            meaning = info.get('meaning') if isinstance(info, dict) else info
++            if isinstance(term, str) and isinstance(meaning, str):
++                nicknames.setdefault(chat, {})[term[:20]] = meaning[:60]
++        for name, person in people.items():
++            if not isinstance(name, str) or not name:
++                continue
++            if mode == 'group':
++                names.append(name)
++            known = [str(f)[:30] for f in (person.get('facts') or [])[:12]] if isinstance(person, dict) else []
++            if isinstance(person, dict) and person.get('impression'):
++                known.append(str(person['impression'])[:40])
++            if known:
++                facts.setdefault(name, known)
++        if mode == 'group':
++            # The owner is never the one she is sent to find.
++            names = [n for n in dict.fromkeys(n.strip() for n in names if n) if n and n != '群友' and n != owner][:80]
++            if names:
++                groups[chat] = names
++    return {'groups': groups, 'facts': dict(list(facts.items())[:120]),
++            'nicknames': {c: dict(list(n.items())[:40]) for c, n in nicknames.items()}}
++
++
+ def guess(line, choices):
+     """The one chat whose name shares the longest run (2+ chars, '群' aside) with the line."""
+     def overlap(name):
+--- a/social_brain.py
++++ b/social_brain.py
+@@ -105,13 +105,27 @@ class Brain:
+                           'thinking': {'type': 'enabled' if thinking else 'disabled'},
+                           'response_format': {'type': 'json_object'}})
+ 
+-    def relay_intent(self, line, candidates):
++    def relay_intent(self, line, candidates, people=None):
+         prompt = ('判断主人这句话是不是要你去另一个聊天里说话、发消息、转告或打招呼。是就 send=true，'
+                   'chat 从候选列表里选最匹配的一项（主人常用简称，如"饭友群"指名字里带"饭友"的群），逐字照抄候选；'
+-                  '实在对不上就留空。只是闲聊、叙述或引用别人的话时 send=false。只输出 JSON {"send":true或false,"chat":"候选或空"}。')
++                  '实在对不上就留空。只是闲聊、叙述或引用别人的话时 send=false。')
++        payload = {'request': line[:2000], 'candidates': candidates}
++        if people:
++            # Owner may name a person ("给张哥发消息"): find who it is from the directory.
++            prompt += ('如果主人要找的是某个人：这个人本身就是候选里的私聊，就选那个私聊、at 和 hint 留空；'
++                       '否则在 people.groups 里找他所在的群，chat 填那个群，at 填他在群成员列表里的名字（逐字照抄）。'
++                       '昵称、外号、"X哥""小X"先查 people.nicknames（各群黑话里记的昵称）和 people.facts（谁被叫什么），再考虑姓氏；在多个群里就选最相关的一个。'
++                       '列表里找不到这个人时 at 留空，hint 填主人对他的称呼里最能搜到他的部分（如"张哥"填"张"、"小王"填"王"），'
++                       'chat 填他最可能在的群（主人没说就留空）。不是找人时 hint 留空。'
++                       '只输出 JSON {"send":true或false,"chat":"候选或空","at":"群成员名或空","hint":"名字线索或空"}。')
++            payload['people'] = people
++        else:
++            prompt += '只输出 JSON {"send":true或false,"chat":"候选或空"}。'
+         value = self.request([{'role':'system','content':prompt},
+-                              {'role':'user','content':json.dumps({'request':line[:2000], 'candidates':candidates},ensure_ascii=False)}])
+-        if not isinstance(value, dict) or set(value) != {'send','chat'} or type(value['send']) is not bool or not isinstance(value['chat'],str):
++                              {'role':'user','content':json.dumps(payload,ensure_ascii=False)[:12000]}])
++        if (not isinstance(value, dict) or not {'send','chat'} <= set(value) <= {'send','chat','at','hint'}
++                or type(value['send']) is not bool or not isinstance(value['chat'],str)
++                or not isinstance(value.get('at',''),str) or not isinstance(value.get('hint',''),str)):
+             raise RuntimeError('social_relay_intent_invalid')
+         return value
+ 
+--- a/wechat_adapter.py
++++ b/wechat_adapter.py
+@@ -649,6 +649,29 @@ class WeChatAdapter:
+         self.press_send(edit, cancel, previous)
+         return missing
+ 
++    def members(self, prefix, cancel=lambda: False):
++        """Group members WeChat's @ popover lists for `prefix`; the typed "@prefix" is removed again."""
++        typed = "".join(ch for ch in prefix if ord(ch) < 0x10000).split(" ")[0]
++        if self.mode != "group" or not typed:
++            return []
++        edit, previous = self.focus_input(cancel)
++        names = []
++        try:
++            edit.SendKeys("@" + typed, interval=0.03, waitTime=0.1)
++            popover = self.window.WindowControl(AutomationId="MentionPopover", searchDepth=30)
++            if self.wait_for(lambda: popover.Exists(0, 0), 2.0):
++                listing = popover.ListControl(searchDepth=6)
++                if listing.Exists(0.3):
++                    self.wait_for(lambda: bool(listing.GetChildren()), 1.5)
++                    names = [item.Name for item in listing.GetChildren() if item.Name][:20]
++        finally:
++            try:
++                edit.SendKeys("{Back}" * (len(typed) + 1), waitTime=0.05)
++            except Exception:
++                pass
++            self.restore(previous)
++        return [n for n in dict.fromkeys(names) if n not in ("所有人", "@所有人")]
++
+     def mention(self, edit, member, cancel):
+         """Type "@name" and pick exactly `member` in WeChat's member popover (the pyweixin way).
+ 
