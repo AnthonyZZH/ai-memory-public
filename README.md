@@ -8,9 +8,8 @@
 
 | 仓库 | 是什么 |
 |---|---|
-| [小千 · 本地版](https://github.com/AnthonyZZH/xiaoqian-wechat) | 自己电脑上跑，LM Studio 本地模型，画图、派活给 agent |
-| [小千 · 服务器版](https://github.com/AnthonyZZH/xiaoqian-wechat/tree/server) | 云服务器 24 小时在线，DeepSeek API，转告、@人、识图 |
-| [服务器部署 skill](https://github.com/AnthonyZZH/xiaoqian-server-deploy) | 从买服务器到上线的流程、脚本和排错手册 |
+| [小千微信 · Harness Native](https://github.com/AnthonyZZH/xiaoqian-weixin) | 小千本体：微信桥接、持久会话、工具与权限，main 图书馆接这里 |
+| [小千部署 Skill](https://github.com/AnthonyZZH/xiaoqian-deploy-skill) | 把小千部署到 Windows 桌面的流程：安装、升级、迁移、健康检查、回退 |
 | **她的图书馆**（当前） | 多个 AI 共用的长期记忆、人格、成长引擎和社交补丁（去隐私公开版） |
 
 ## 项目简介
