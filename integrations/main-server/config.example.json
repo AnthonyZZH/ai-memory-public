@@ -1,0 +1,8 @@
+{
+  "libraryUrl": "http://127.0.0.1:8767/mcp",
+  "probeIdentifier": "00-总览/目录",
+  "chats": [{"id": "owner-example", "mode": "private", "owner": true}],
+  "serverRoot": "C:\\AI-Library\\main",
+  "backupRoot": "E:\\AI-Library-Backups",
+  "sshAlias": "library-host"
+}

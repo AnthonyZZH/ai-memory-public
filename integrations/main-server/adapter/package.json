@@ -1,0 +1,9 @@
+{
+  "name": "xiaoqian-main-library-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": { "test": "node --test tests/*.test.mjs" },
+  "exports": { ".": { "types": "./src/index.d.mts", "import": "./src/index.mjs" } }
+}

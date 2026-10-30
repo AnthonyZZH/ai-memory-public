@@ -167,3 +167,8 @@ DeepSeek Harness（本机会话）
 - 身份由接入入口决定，不由对话内容决定；规则见 `scripts/memory-rules.md` 的「私密库(owner-only)」。
 - 限制：这是配置层的逻辑隔离，不是操作系统级隔离。8768 无认证，同一 Windows 用户下的其他进程能直接连；QQ Bridge 默认持有 DSH 会话签名密钥，它被攻破时可以开完整权限会话。接 QQ 前必须实测 `qq-chat` 预设的会话工具列表里没有 `mcp__private__*`；不要开 QQ Bridge 的 `closed-agent` 模式。
 - 自启：计划任务 `AI-Memory-Private-HTTP` 尚未注册（注册被权限拦截，待主人亲自执行）；`scripts/run_task.py` 已加 `serve-private` 命令。未注册前，重启电脑后需手动运行 `scripts/serve-private.ps1`。
+
+
+## main 图书馆服务器代码适配
+
+[部署、主人专属 MCP 接入、每日版本备份与恢复说明](integrations/main-server/README.md)。本项目适配官方 basic-memory 0.24.1，真实索引锚点为 `00-总览/目录`；包含脱敏配置与合成测试，使用前请核对模板路径、账户和时区。此目录不包含知识库数据、人格或运行凭据。
