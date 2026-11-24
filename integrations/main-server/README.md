@@ -63,7 +63,19 @@ registerOwnerLibraryTools({
 
 ## 针对性验证
 
+适配器的 MCP 传输、权限检查和错误处理由[小千主仓](https://github.com/AnthonyZZH/xiaoqian-weixin/tree/main/vendor/library-adapter)维护。`adapter/src/core.mjs` 是固定提交的离线副本，`adapter/core-source.json` 记录其提交、路径和 SHA-256。此包的 `src/index.mjs` 保留通用工具接口，微信宿主单独维护微信搜索结果的过滤规则。
+
+升级公共实现时，在本目录从已检出的主仓提交同步。校验可直接在离线机器上运行，附上主仓检出目录还能逐字节核对 Git 对象。
+
 ```powershell
+$checkout = Read-Host '小千主仓的本地目录'
+$commit = Read-Host '已发布的 40 位 Git 提交哈希'
+node adapter/sync-core.mjs --update $checkout $commit
+node adapter/sync-core.mjs --check $checkout
+```
+
+```powershell
+node adapter/sync-core.mjs --check
 node --test adapter/tests/library.test.mjs
 Set-Location backup
 python -m unittest -v test_backup.py

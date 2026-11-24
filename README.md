@@ -1,5 +1,7 @@
 # 她的图书馆（AI-Memory）
 
+她的图书馆是独立维护的多 AI 记忆库。微信助手如何接入图书馆，见[小千主仓](https://github.com/AnthonyZZH/xiaoqian-weixin)。
+
 一套**本机运行、多个 AI 共用的长期记忆库**。笔记是普通 Markdown 文件，用 [basic-memory](https://github.com/basicmachines-co/basic-memory) 提供检索，通过 MCP 协议让 Claude Code、Codex、DeepSeek Harness 和 LM Studio 里的本地模型读写同一份记忆，Obsidian 可以直接打开查看。
 
 > 这是**去隐私的公开版**：个人笔记（`vault/` 里的内容）、服务器操作日志和测试记录都已移除，只留目录模板；服务器地址、账号、朋友的名字都换成了占位或示例。路径仍按作者的 `E:\` 布局写，没有做成通用安装包。
@@ -9,7 +11,7 @@
 | 仓库 | 是什么 |
 |---|---|
 | [小千微信 · Harness Native](https://github.com/AnthonyZZH/xiaoqian-weixin) | 小千本体：微信桥接、持久会话、工具与权限，main 图书馆接这里 |
-| [小千部署 Skill](https://github.com/AnthonyZZH/xiaoqian-deploy-skill) | 把小千部署到 Windows 桌面的流程：安装、升级、迁移、健康检查、回退 |
+| [小千部署 Skill](https://github.com/AnthonyZZH/xiaoqian-weixin/tree/main/skills/xiaoqian-deploy) | 把小千部署到 Windows 桌面的流程：安装、升级、迁移、健康检查、回退 |
 | **她的图书馆**（当前） | 多个 AI 共用的长期记忆、人格、成长引擎和社交补丁（去隐私公开版） |
 
 ## 项目简介

@@ -1,5 +1,7 @@
 # xiaoqian-wechat 社交加固补丁
 
+本页记录旧版 `xiaoqian-wechat` 的构建与加固补丁。新部署和现有微信助手的迁移请使用[小千主仓的 Windows 部署指南](https://github.com/AnthonyZZH/xiaoqian-weixin/tree/main/skills/xiaoqian-deploy)。
+
 上游基线为已去隐私的 `AnthonyZZH/xiaoqian-wechat`，提交 `27bb88c33d3b9e43ffb368f576b736ec090b88be`。`vendor.lock` 同时固定原始树、补丁、应用后树的 SHA256。上游仓库保持不动；源码只在新的构建输出目录中出现。
 
 离线构建示例（输出目录必须不存在）：
